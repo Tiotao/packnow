@@ -1,0 +1,13 @@
+{
+  "applinks": {
+    "details": [
+      {
+        "appIDs": ["54QHK3KCYL.com.doverroadbrewery.PackNow"],
+        "components": [
+          { "/": "/t/*", "comment": "Shared packing lists" },
+          { "/": "/t" }
+        ]
+      }
+    ]
+  }
+}

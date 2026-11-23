@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Shared packing list – PackNow</title>
+<meta name="description" content="A packing list shared from PackNow.">
+<meta name="robots" content="noindex">
+<script>
+  // Safari's Smart App Banner: "Open" hands this link to PackNow.
+  const banner = document.createElement("meta");
+  banner.name = "apple-itunes-app";
+  banner.content = "app-id=6824773454, app-argument=" + location.href;
+  document.head.append(banner);
+</script>
+<link rel="stylesheet" href="../style.css">
+<style>
+  .actions { display:flex; flex-wrap:wrap; gap:10px; margin-top:14px; }
+  .btn { display:inline-block; padding:11px 18px; border-radius:12px; text-decoration:none; font-weight:600; }
+  .btn.primary { background:var(--accent); color:#fff; }
+  .btn.secondary { border:1px solid var(--line); color:var(--text); }
+  .meta { color:var(--muted); margin:2px 0 0; }
+  ul.items { list-style:none; padding:0; margin:6px 0 0; }
+  ul.items li { padding:7px 0; border-top:1px solid var(--line); display:flex; gap:10px; }
+  ul.items li:first-child { border-top:0; }
+  ul.items .qty { color:var(--muted); margin-left:auto; }
+  ul.items .note { display:block; color:var(--muted); font-size:14px; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <img src="../icon.png" alt="" onerror="this.remove()">
+    <div><h1>PackNow</h1><p>Packing lists that fit the trip.</p></div>
+  </header>
+
+  <section id="intro">
+    <h2 id="title">Shared packing list</h2>
+    <p id="meta" class="meta"></p>
+    <p>Have PackNow? Open this list to add it as a trip on your iPhone.</p>
+    <div class="actions">
+      <a id="open" class="btn primary" href="#">Open in PackNow</a>
+      <a class="btn secondary" href="https://apps.apple.com/app/id6824773454">Get PackNow</a>
+    </div>
+  </section>
+
+  <div id="list"></div>
+
+  <section id="error" hidden>
+    <h2>This link looks incomplete</h2>
+    <p>It may have been cut off when it was sent. Ask for the link again.</p>
+  </section>
+
+  <nav><a href="../">Help &amp; support</a> · <a href="../privacy.html">Privacy</a></nav>
+</main>
+
+<script>
+// The list lives in the part of the link after "#", which is never sent to this
+// server: it is decoded here, in your browser.
+const CATEGORIES = {
+  alwaysPack: "My Essentials", documents: "Documents & Money", clothing: "Clothing",
+  weatherGear: "Weather Gear", electronics: "Electronics", toiletries: "Toiletries",
+  health: "Health & Medicine", misc: "Accessories"
+};
+const ORDER = ["alwaysPack", "documents", "clothing", "weatherGear", "electronics", "toiletries", "health"];
+
+async function decode(fragment) {
+  const b64 = fragment.replace(/-/g, "+").replace(/_/g, "/");
+  const bytes = Uint8Array.from(atob(b64 + "=".repeat((4 - b64.length % 4) % 4)), c => c.charCodeAt(0));
+  const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream("deflate-raw"));
+  return JSON.parse(await new Response(stream).text());
+}
+
+function el(tag, attrs, ...children) {
+  const node = document.createElement(tag);
+  Object.assign(node, attrs || {});
+  for (const c of children) if (c != null) node.append(c);
+  return node;
+}
+
+function formatDate(iso) {
+  const [y, m, d] = iso.split("-").map(Number);
+  return new Date(y, m - 1, d).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+}
+
+(async () => {
+  const fragment = location.hash.slice(1);
+  document.getElementById("open").href = "packnow://t/#" + fragment;
+  let trip;
+  try {
+    if (!fragment) throw new Error("empty");
+    trip = await decode(fragment);
+  } catch (e) {
+    document.getElementById("intro").hidden = true;
+    document.getElementById("error").hidden = false;
+    return;
+  }
+
+  const days = trip.stops.reduce((n, s) => n + s.d, 0);
+  const title = trip.name || trip.stops.map(s => s.n).join(" → ");
+  document.title = title + " – PackNow";
+  document.getElementById("title").textContent = title;
+  document.getElementById("meta").textContent =
+    `${formatDate(trip.start)} · ${days} ${days === 1 ? "day" : "days"} · ${trip.items.length} items`;
+
+  const custom = Object.fromEntries((trip.cats || []).map(c => [c.id, c.n]));
+  const groups = new Map();
+  for (const item of trip.items) {
+    if (!groups.has(item.c)) groups.set(item.c, []);
+    groups.get(item.c).push(item);
+  }
+  const rank = c => ORDER.includes(c) ? ORDER.indexOf(c) : (c === "misc" ? 999 : 100);
+  const list = document.getElementById("list");
+  for (const cat of [...groups.keys()].sort((a, b) => rank(a) - rank(b))) {
+    const ul = el("ul", { className: "items" });
+    for (const item of groups.get(cat)) {
+      ul.append(el("li", null,
+        el("span", null, item.n, item.o ? el("span", { className: "note", textContent: item.o }) : null),
+        item.q > 1 ? el("span", { className: "qty", textContent: "×" + item.q }) : null));
+    }
+    list.append(el("section", null, el("h2", { textContent: CATEGORIES[cat] || custom[cat] || "Other" }), ul));
+  }
+})();
+</script>
+</body>
+</html>
